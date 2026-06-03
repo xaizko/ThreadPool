@@ -1,4 +1,5 @@
 #include "ThreadPool.hpp"
+#include <functional>
 #include <mutex>
 
 ThreadPool::ThreadPool(size_t numThreads) {
@@ -28,4 +29,26 @@ ThreadPool::ThreadPool(size_t numThreads) {
 					})
 				);
 	}
+}
+
+ThreadPool::~ThreadPool() {
+	{
+		std::unique_lock<std::mutex> lock(queueMutex);
+		stopPool = true;
+	}
+	cv.notify_all();
+
+	for (std::thread &worker : workers) {
+		if (worker.joinable()) {
+			worker.join();
+		}
+	}
+}
+
+void ThreadPool::enqueue(std::function<void()> task) {
+	{
+		std::unique_lock<std::mutex> lock(queueMutex);
+		tasks.push(task);
+	}
+	cv.notify_one();
 }
